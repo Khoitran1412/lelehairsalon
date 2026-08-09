@@ -22,6 +22,10 @@ const bookingServices: ReadonlyArray<{ key: BookingServiceKey; value: string }> 
   { key: 'other', value: 'Other' },
 ];
 
+function isBookingSuccessResponse(value: unknown): value is { success: true } {
+  return typeof value === 'object' && value !== null && 'success' in value && value.success === true;
+}
+
 interface BookingContextValue {
   openBooking: () => void;
 }
@@ -119,32 +123,39 @@ export function BookingPopup({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
+    if (isSubmitting) return;
+
     if (!form.fullName.trim() || !form.phone.trim() || !form.bookingDate || !form.bookingTime || !form.service) {
       setMessage('required');
-      return;
-    }
-
-    const endpoint = process.env.NEXT_PUBLIC_BOOKING_ENDPOINT;
-    if (!endpoint) {
-      setMessage('error');
       return;
     }
 
     setIsSubmitting(true);
     setMessage('idle');
 
-    const body = new URLSearchParams();
-    body.set('fullName', form.fullName.trim());
-    body.set('phone', form.phone.trim());
-    body.set('bookingDate', form.bookingDate);
-    body.set('bookingTime', form.bookingTime);
-    body.set('service', form.service);
-    body.set('note', form.note.trim());
-    body.set('language', language);
-    body.set('sourcePage', window.location.href);
+    const body = {
+      fullName: form.fullName.trim(),
+      phone: form.phone.trim(),
+      bookingDate: form.bookingDate,
+      bookingTime: form.bookingTime,
+      service: form.service,
+      note: form.note.trim(),
+      language,
+      sourcePage: window.location.href,
+    };
 
     try {
-      await fetch(endpoint, { method: 'POST', mode: 'no-cors', body });
+      const response = await fetch('/api/booking', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result: unknown = await response.json().catch(() => null);
+
+      if (!response.ok || !isBookingSuccessResponse(result)) {
+        throw new Error('Booking submission failed');
+      }
+
       setMessage('success');
       setForm({ fullName: '', phone: '', bookingDate: '', bookingTime: '', service: '', note: '' });
     } catch {
