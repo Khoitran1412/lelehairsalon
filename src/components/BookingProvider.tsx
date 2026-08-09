@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ButtonHTMLAttributes, type FormEvent, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState, type ButtonHTMLAttributes, type Dispatch, type FormEvent, type ReactNode, type SetStateAction } from 'react';
 import { HiX } from 'react-icons/hi';
 import { translations } from '@/i18n/translations';
 import { useLanguage } from '@/i18n/useLanguage';
@@ -22,7 +22,29 @@ const bookingServices: ReadonlyArray<{ key: BookingServiceKey; value: string }> 
   { key: 'other', value: 'Other' },
 ];
 
-function isBookingSuccessResponse(value: unknown): value is { success: true } {
+type AppointmentForm = {
+  fullName: string;
+  phone: string;
+  bookingDate: string;
+  bookingTime: string;
+  service: string;
+  note: string;
+};
+
+const createEmptyAppointmentForm = (): AppointmentForm => ({
+  fullName: '',
+  phone: '',
+  bookingDate: '',
+  bookingTime: '',
+  service: '',
+  note: '',
+});
+
+function hasRequiredAppointmentFields(form: AppointmentForm) {
+  return Boolean(form.fullName.trim() && form.phone.trim() && form.bookingDate && form.bookingTime && form.service);
+}
+
+function isSuccessfulResponse(value: unknown): value is { success: true } {
   return typeof value === 'object' && value !== null && 'success' in value && value.success === true;
 }
 
@@ -111,7 +133,7 @@ function PopupShell({
 
 export function BookingPopup({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
   const { language, t } = useLanguage();
-  const [form, setForm] = useState({ fullName: '', phone: '', bookingDate: '', bookingTime: '', service: '', note: '' });
+  const [form, setForm] = useState<AppointmentForm>(createEmptyAppointmentForm);
   const [message, setMessage] = useState<'idle' | 'success' | 'error' | 'required'>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -125,7 +147,7 @@ export function BookingPopup({ isOpen, onClose }: { isOpen: boolean; onClose: ()
 
     if (isSubmitting) return;
 
-    if (!form.fullName.trim() || !form.phone.trim() || !form.bookingDate || !form.bookingTime || !form.service) {
+    if (!hasRequiredAppointmentFields(form)) {
       setMessage('required');
       return;
     }
@@ -152,12 +174,12 @@ export function BookingPopup({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       });
       const result: unknown = await response.json().catch(() => null);
 
-      if (!response.ok || !isBookingSuccessResponse(result)) {
+      if (!response.ok || !isSuccessfulResponse(result)) {
         throw new Error('Booking submission failed');
       }
 
       setMessage('success');
-      setForm({ fullName: '', phone: '', bookingDate: '', bookingTime: '', service: '', note: '' });
+      setForm(createEmptyAppointmentForm());
     } catch {
       setMessage('error');
     } finally {
@@ -172,74 +194,7 @@ export function BookingPopup({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       <p className="mt-3 font-body leading-relaxed text-charcoal/65">{t.bookingPopup.description}</p>
 
       <form className="mt-6 space-y-4" onSubmit={submit} noValidate>
-        <FormField label={t.bookingPopup.fullName} required>
-          <input
-            name="fullName"
-            value={form.fullName}
-            onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))}
-            autoComplete="name"
-            className={inputClassName}
-            required
-          />
-        </FormField>
-        <FormField label={t.bookingPopup.phone} required>
-          <input
-            name="phone"
-            type="tel"
-            inputMode="tel"
-            value={form.phone}
-            onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
-            autoComplete="tel"
-            className={inputClassName}
-            required
-          />
-        </FormField>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField label={t.bookingPopup.bookingDate} required>
-            <input
-              name="bookingDate"
-              type="date"
-              min={getToday()}
-              value={form.bookingDate}
-              onChange={(event) => setForm((current) => ({ ...current, bookingDate: event.target.value }))}
-              className={inputClassName}
-              required
-            />
-          </FormField>
-          <FormField label={t.bookingPopup.bookingTime} required>
-            <input
-              name="bookingTime"
-              type="time"
-              value={form.bookingTime}
-              onChange={(event) => setForm((current) => ({ ...current, bookingTime: event.target.value }))}
-              className={inputClassName}
-              required
-            />
-          </FormField>
-        </div>
-        <FormField label={t.bookingPopup.service} required>
-          <select
-            name="service"
-            value={form.service}
-            onChange={(event) => setForm((current) => ({ ...current, service: event.target.value }))}
-            className={inputClassName}
-            required
-          >
-            <option value="">{t.bookingPopup.servicePlaceholder}</option>
-            {bookingServices.map((service) => (
-              <option key={service.value} value={service.value}>{t.bookingPopup.services[service.key]}</option>
-            ))}
-          </select>
-        </FormField>
-        <FormField label={t.bookingPopup.note}>
-          <textarea
-            name="note"
-            value={form.note}
-            onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
-            rows={3}
-            className={`${inputClassName} resize-y`}
-          />
-        </FormField>
+        <AppointmentFields form={form} setForm={setForm} />
 
         <FormMessage message={message} messages={t.bookingPopup} />
         <button type="submit" className="btn-primary w-full border-0 px-5 py-3.5" disabled={isSubmitting}>
@@ -250,39 +205,135 @@ export function BookingPopup({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   );
 }
 
-function DealerLeadPopup({ dealerCode, isOpen, onClose }: { dealerCode: string | null; isOpen: boolean; onClose: () => void }) {
+function AppointmentFields({
+  form,
+  setForm,
+}: {
+  form: AppointmentForm;
+  setForm: Dispatch<SetStateAction<AppointmentForm>>;
+}) {
   const { t } = useLanguage();
-  const [fullName, setFullName] = useState('');
-  const [phone, setPhone] = useState('');
+
+  return (
+    <>
+      <FormField label={t.bookingPopup.fullName} required>
+        <input
+          name="fullName"
+          value={form.fullName}
+          onChange={(event) => setForm((current) => ({ ...current, fullName: event.target.value }))}
+          autoComplete="name"
+          className={inputClassName}
+          required
+        />
+      </FormField>
+      <FormField label={t.bookingPopup.phone} required>
+        <input
+          name="phone"
+          type="tel"
+          inputMode="tel"
+          value={form.phone}
+          onChange={(event) => setForm((current) => ({ ...current, phone: event.target.value }))}
+          autoComplete="tel"
+          className={inputClassName}
+          required
+        />
+      </FormField>
+      <div className="grid gap-4 sm:grid-cols-2">
+        <FormField label={t.bookingPopup.bookingDate} required>
+          <input
+            name="bookingDate"
+            type="date"
+            min={getToday()}
+            value={form.bookingDate}
+            onChange={(event) => setForm((current) => ({ ...current, bookingDate: event.target.value }))}
+            className={inputClassName}
+            required
+          />
+        </FormField>
+        <FormField label={t.bookingPopup.bookingTime} required>
+          <input
+            name="bookingTime"
+            type="time"
+            value={form.bookingTime}
+            onChange={(event) => setForm((current) => ({ ...current, bookingTime: event.target.value }))}
+            className={inputClassName}
+            required
+          />
+        </FormField>
+      </div>
+      <FormField label={t.bookingPopup.service} required>
+        <select
+          name="service"
+          value={form.service}
+          onChange={(event) => setForm((current) => ({ ...current, service: event.target.value }))}
+          className={inputClassName}
+          required
+        >
+          <option value="">{t.bookingPopup.servicePlaceholder}</option>
+          {bookingServices.map((service) => (
+            <option key={service.value} value={service.value}>{t.bookingPopup.services[service.key]}</option>
+          ))}
+        </select>
+      </FormField>
+      <FormField label={t.bookingPopup.note}>
+        <textarea
+          name="note"
+          value={form.note}
+          onChange={(event) => setForm((current) => ({ ...current, note: event.target.value }))}
+          rows={3}
+          className={`${inputClassName} resize-y`}
+        />
+      </FormField>
+    </>
+  );
+}
+
+function DealerLeadPopup({ dealerCode, isOpen, onClose }: { dealerCode: string | null; isOpen: boolean; onClose: () => void }) {
+  const { language, t } = useLanguage();
+  const [form, setForm] = useState<AppointmentForm>(createEmptyAppointmentForm);
   const [message, setMessage] = useState<'idle' | 'success' | 'error' | 'required'>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!dealerCode || !fullName.trim() || !phone.trim()) {
-      setMessage('required');
-      return;
-    }
+    if (isSubmitting) return;
 
-    const endpoint = process.env.NEXT_PUBLIC_LEAD_ENDPOINT;
-    if (!endpoint) {
-      setMessage('error');
+    if (!dealerCode || !hasRequiredAppointmentFields(form)) {
+      setMessage('required');
       return;
     }
 
     setIsSubmitting(true);
     setMessage('idle');
 
-    const body = new URLSearchParams();
-    body.set('fullName', fullName.trim());
-    body.set('phone', phone.trim());
-    body.set('dealerCode', dealerCode);
+    const body = {
+      fullName: form.fullName.trim(),
+      phone: form.phone.trim(),
+      bookingDate: form.bookingDate,
+      bookingTime: form.bookingTime,
+      service: form.service,
+      note: form.note.trim(),
+      dealerCode,
+      language,
+      sourcePage: window.location.href,
+    };
 
     try {
-      await fetch(endpoint, { method: 'POST', mode: 'no-cors', body });
+      const response = await fetch('/api/lead', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const result: unknown = await response.json().catch(() => null);
+
+      if (!response.ok || !isSuccessfulResponse(result)) {
+        throw new Error('Dealer lead submission failed');
+      }
+
       window.sessionStorage.setItem(`${DEALER_SUBMISSION_KEY}${dealerCode}`, 'true');
       setMessage('success');
+      setForm(createEmptyAppointmentForm());
     } catch {
       setMessage('error');
     } finally {
@@ -297,28 +348,7 @@ function DealerLeadPopup({ dealerCode, isOpen, onClose }: { dealerCode: string |
       <p className="mt-3 font-body leading-relaxed text-charcoal/65">{t.dealerLead.description}</p>
 
       <form className="mt-6 space-y-4" onSubmit={submit} noValidate>
-        <FormField label={t.dealerLead.fullName} required>
-          <input
-            name="fullName"
-            value={fullName}
-            onChange={(event) => setFullName(event.target.value)}
-            autoComplete="name"
-            className={inputClassName}
-            required
-          />
-        </FormField>
-        <FormField label={t.dealerLead.phone} required>
-          <input
-            name="phone"
-            type="tel"
-            inputMode="tel"
-            value={phone}
-            onChange={(event) => setPhone(event.target.value)}
-            autoComplete="tel"
-            className={inputClassName}
-            required
-          />
-        </FormField>
+        <AppointmentFields form={form} setForm={setForm} />
 
         <FormMessage message={message} messages={t.dealerLead} />
         <button type="submit" className="btn-primary w-full border-0 px-5 py-3.5" disabled={isSubmitting || message === 'success'}>

@@ -241,7 +241,7 @@ export const translations = {
       submitting: 'SENDING…',
       success: 'Thank you. Your details have been sent.',
       error: 'We could not send your details. Please try again.',
-      required: 'Please complete your name and phone number.',
+      required: 'Please complete all required fields.',
       close: 'Close referral form',
     },
     contact: {
@@ -580,7 +580,7 @@ export const translations = {
       submitting: 'ĐANG GỬI…',
       success: 'Cảm ơn bạn. Thông tin của bạn đã được gửi.',
       error: 'Không thể gửi thông tin lúc này. Vui lòng thử lại.',
-      required: 'Vui lòng điền họ tên và số điện thoại.',
+      required: 'Vui lòng điền đủ các trường bắt buộc.',
       close: 'Đóng biểu mẫu giới thiệu',
     },
     contact: {
