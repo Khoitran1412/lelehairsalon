@@ -7,6 +7,7 @@ import { useLanguage } from '@/i18n/useLanguage';
 
 const DEALER_PATTERN = /^DL(?:00[1-9]|01\d|020)$/;
 const DEALER_SUBMISSION_KEY = 'lele-dealer-lead-submitted:';
+const SUCCESS_CLOSE_DELAY_MS = 1200;
 
 type BookingServiceKey = keyof typeof translations.en.bookingPopup.services;
 
@@ -81,14 +82,21 @@ function PopupShell({
   children: ReactNode;
 }) {
   const closeButtonRef = useRef<HTMLButtonElement>(null);
+  const previouslyFocusedElementRef = useRef<HTMLElement | null>(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!isOpen) return;
 
+    previouslyFocusedElementRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const previousBodyOverflow = document.body.style.overflow;
     const previousDocumentOverflow = document.documentElement.style.overflow;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') onCloseRef.current();
     };
 
     document.body.style.overflow = 'hidden';
@@ -100,8 +108,14 @@ function PopupShell({
       document.body.style.overflow = previousBodyOverflow;
       document.documentElement.style.overflow = previousDocumentOverflow;
       window.removeEventListener('keydown', onKeyDown);
+
+      const focusTarget = previouslyFocusedElementRef.current;
+      previouslyFocusedElementRef.current = null;
+      if (focusTarget?.isConnected) {
+        window.requestAnimationFrame(() => focusTarget.focus());
+      }
     };
-  }, [isOpen, onClose]);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -136,11 +150,31 @@ export function BookingPopup({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   const [form, setForm] = useState<AppointmentForm>(createEmptyAppointmentForm);
   const [message, setMessage] = useState<'idle' | 'success' | 'error' | 'required'>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
+
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
 
   const close = useCallback(() => {
+    clearCloseTimer();
     setMessage('idle');
+    setForm(createEmptyAppointmentForm());
     onClose();
-  }, [onClose]);
+  }, [clearCloseTimer, onClose]);
+
+  const scheduleCloseAfterSuccess = useCallback(() => {
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      close();
+    }, SUCCESS_CLOSE_DELAY_MS);
+  }, [clearCloseTimer, close]);
+
+  useEffect(() => clearCloseTimer, [clearCloseTimer]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -179,7 +213,7 @@ export function BookingPopup({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       }
 
       setMessage('success');
-      setForm(createEmptyAppointmentForm());
+      scheduleCloseAfterSuccess();
     } catch {
       setMessage('error');
     } finally {
@@ -197,7 +231,7 @@ export function BookingPopup({ isOpen, onClose }: { isOpen: boolean; onClose: ()
         <AppointmentFields form={form} setForm={setForm} />
 
         <FormMessage message={message} messages={t.bookingPopup} />
-        <button type="submit" className="btn-primary w-full border-0 px-5 py-3.5" disabled={isSubmitting}>
+        <button type="submit" className="btn-primary w-full border-0 px-5 py-3.5" disabled={isSubmitting || message === 'success'}>
           {isSubmitting ? t.bookingPopup.submitting : t.bookingPopup.submit}
         </button>
       </form>
@@ -293,6 +327,31 @@ function DealerLeadPopup({ dealerCode, isOpen, onClose }: { dealerCode: string |
   const [form, setForm] = useState<AppointmentForm>(createEmptyAppointmentForm);
   const [message, setMessage] = useState<'idle' | 'success' | 'error' | 'required'>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const closeTimerRef = useRef<number | null>(null);
+
+  const clearCloseTimer = useCallback(() => {
+    if (closeTimerRef.current !== null) {
+      window.clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  }, []);
+
+  const close = useCallback(() => {
+    clearCloseTimer();
+    setMessage('idle');
+    setForm(createEmptyAppointmentForm());
+    onClose();
+  }, [clearCloseTimer, onClose]);
+
+  const scheduleCloseAfterSuccess = useCallback(() => {
+    clearCloseTimer();
+    closeTimerRef.current = window.setTimeout(() => {
+      closeTimerRef.current = null;
+      close();
+    }, SUCCESS_CLOSE_DELAY_MS);
+  }, [clearCloseTimer, close]);
+
+  useEffect(() => clearCloseTimer, [clearCloseTimer]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -333,7 +392,7 @@ function DealerLeadPopup({ dealerCode, isOpen, onClose }: { dealerCode: string |
 
       window.sessionStorage.setItem(`${DEALER_SUBMISSION_KEY}${dealerCode}`, 'true');
       setMessage('success');
-      setForm(createEmptyAppointmentForm());
+      scheduleCloseAfterSuccess();
     } catch {
       setMessage('error');
     } finally {
@@ -342,7 +401,7 @@ function DealerLeadPopup({ dealerCode, isOpen, onClose }: { dealerCode: string |
   };
 
   return (
-    <PopupShell isOpen={isOpen} onClose={onClose} dialogLabel={t.dealerLead.dialogLabel} closeLabel={t.dealerLead.close}>
+    <PopupShell isOpen={isOpen} onClose={close} dialogLabel={t.dealerLead.dialogLabel} closeLabel={t.dealerLead.close}>
       <p className="section-label">LELE HAIR DESIGN</p>
       <h2 className="mt-3 font-display text-3xl leading-tight text-charcoal sm:text-4xl">{t.dealerLead.title}</h2>
       <p className="mt-3 font-body leading-relaxed text-charcoal/65">{t.dealerLead.description}</p>
