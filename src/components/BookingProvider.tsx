@@ -8,6 +8,7 @@ import { useLanguage } from '@/i18n/useLanguage';
 const DEALER_PATTERN = /^DL(?:00[1-9]|01\d|020)$/;
 const DEALER_SUBMISSION_KEY = 'lele-dealer-lead-submitted:';
 const SUCCESS_CLOSE_DELAY_MS = 1200;
+const DEALER_POPUP_DELAY_MS = 5000;
 
 type BookingServiceKey = keyof typeof translations.en.bookingPopup.services;
 
@@ -450,13 +451,43 @@ export function BookingProvider({ children }: { children: ReactNode }) {
   const [isLeadOpen, setIsLeadOpen] = useState(false);
 
   useEffect(() => {
-    const frame = window.requestAnimationFrame(() => {
+    let popupTimer: number | null = null;
+
+    const clearPopupTimer = () => {
+      if (popupTimer !== null) {
+        window.clearTimeout(popupTimer);
+        popupTimer = null;
+      }
+    };
+
+    const syncDealerPopup = () => {
+      clearPopupTimer();
       const validDealerCode = getValidDealerCode();
       setDealerCode(validDealerCode);
-      setIsLeadOpen(Boolean(validDealerCode && !window.sessionStorage.getItem(`${DEALER_SUBMISSION_KEY}${validDealerCode}`)));
-    });
+      setIsLeadOpen(false);
 
-    return () => window.cancelAnimationFrame(frame);
+      if (!validDealerCode || window.sessionStorage.getItem(`${DEALER_SUBMISSION_KEY}${validDealerCode}`)) return;
+
+      popupTimer = window.setTimeout(() => {
+        popupTimer = null;
+
+        if (
+          getValidDealerCode() === validDealerCode
+          && !window.sessionStorage.getItem(`${DEALER_SUBMISSION_KEY}${validDealerCode}`)
+        ) {
+          setIsLeadOpen(true);
+        }
+      }, DEALER_POPUP_DELAY_MS);
+    };
+
+    const frame = window.requestAnimationFrame(syncDealerPopup);
+    window.addEventListener('popstate', syncDealerPopup);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      clearPopupTimer();
+      window.removeEventListener('popstate', syncDealerPopup);
+    };
   }, []);
 
   const openBooking = useCallback(() => setIsBookingOpen(true), []);
