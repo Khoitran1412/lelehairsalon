@@ -40,7 +40,7 @@ export default function CustomerGallery() {
               {siteContent.customerGallery.map((item, index) => (
                 <figure
                   key={item.id}
-                  className={`group w-[86vw] shrink-0 snap-start scroll-mb-24 border border-burgundy/15 bg-white md:w-auto md:shrink ${desktopLayout[index]}`}
+                  className={`group w-[86vw] shrink-0 snap-start scroll-mb-24 border border-burgundy/15 bg-white md:w-auto md:shrink ${desktopLayout[index % desktopLayout.length]}`}
                 >
                   <div className="relative aspect-[3/4] overflow-hidden">
                     <Image

@@ -331,6 +331,60 @@ const siteContent = {
         vi: 'Mẫu tóc ngắn thực tế tại LeLe Hair Design',
       },
     },
+    {
+      id: 'short-curly-cut',
+      image: '/images/real-clients/05-short-curly-cut.jpg',
+      title: { en: 'Short Curly Cut', vi: 'Tóc ngắn uốn xoăn' },
+      alt: {
+        en: 'Short curly haircut created for a customer at LeLe Hair Design',
+        vi: 'Mẫu tóc ngắn uốn xoăn thực tế tại LeLe Hair Design',
+      },
+    },
+    {
+      id: 'wavy-bob',
+      image: '/images/real-clients/06-wavy-bob.jpg',
+      title: { en: 'Wavy Bob', vi: 'Bob uốn sóng' },
+      alt: {
+        en: 'Soft wavy bob hairstyle created for a customer at LeLe Hair Design',
+        vi: 'Mẫu tóc Bob uốn sóng mềm thực tế tại LeLe Hair Design',
+      },
+    },
+    {
+      id: 'long-layer-volume',
+      image: '/images/real-clients/07-long-layer-volume.jpg',
+      title: { en: 'Long Layer', vi: 'Long Layer' },
+      alt: {
+        en: 'Voluminous long layered hairstyle created at LeLe Hair Design',
+        vi: 'Mẫu tóc Long Layer bồng bềnh thực tế tại LeLe Hair Design',
+      },
+    },
+    {
+      id: 'balayage-waves',
+      image: '/images/real-clients/08-balayage-waves.jpg',
+      title: { en: 'Balayage Waves', vi: 'Balayage uốn sóng' },
+      alt: {
+        en: 'Dimensional balayage waves created at LeLe Hair Design',
+        vi: 'Mẫu tóc Balayage uốn sóng có chiều sâu tại LeLe Hair Design',
+      },
+    },
+    {
+      id: 'sleek-straight',
+      image: '/images/real-clients/09-sleek-straight.jpg',
+      title: { en: 'Sleek Straight', vi: 'Tóc duỗi suôn mượt' },
+      alt: {
+        en: 'Long sleek straight hairstyle created at LeLe Hair Design',
+        vi: 'Mẫu tóc dài duỗi suôn mượt thực tế tại LeLe Hair Design',
+      },
+    },
+    {
+      id: 'ash-balayage-layer',
+      image: '/images/real-clients/10-ash-balayage-layer.jpg',
+      title: { en: 'Ash Balayage', vi: 'Balayage ánh khói' },
+      alt: {
+        en: 'Ash balayage layered hairstyle created at LeLe Hair Design',
+        vi: 'Mẫu tóc Layer Balayage ánh khói tại LeLe Hair Design',
+      },
+    },
   ] satisfies CustomerGalleryItem[],
   portfolioFilters: ['TẤT CẢ', 'LAYER', 'BOB', 'CURL', 'COLOR', 'WOLFCUT', 'TRANSFORMATION'],
   portfolio: [
