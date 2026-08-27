@@ -4,6 +4,13 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { HiX } from 'react-icons/hi';
 import { translations } from '@/i18n/translations';
 import { useLanguage } from '@/i18n/useLanguage';
+import {
+  createBookingRequestBody,
+  createBookingSubmissionGuard,
+  submitBookingRequest,
+  type BookingConfirmation,
+  type BookingFormValues,
+} from '@/lib/booking/booking-submission';
 
 const DEALER_PATTERN = /^DL(?:00[1-9]|01\d|020)$/;
 const DEALER_SUBMISSION_KEY = 'lele-dealer-lead-submitted:';
@@ -24,14 +31,7 @@ const bookingServices: ReadonlyArray<{ key: BookingServiceKey; value: string }> 
   { key: 'other', value: 'Other' },
 ];
 
-type AppointmentForm = {
-  fullName: string;
-  phone: string;
-  bookingDate: string;
-  bookingTime: string;
-  service: string;
-  note: string;
-};
+type AppointmentForm = BookingFormValues;
 
 const createEmptyAppointmentForm = (): AppointmentForm => ({
   fullName: '',
@@ -40,6 +40,7 @@ const createEmptyAppointmentForm = (): AppointmentForm => ({
   bookingTime: '',
   service: '',
   note: '',
+  notificationConsent: false,
 });
 
 function hasRequiredAppointmentFields(form: AppointmentForm) {
@@ -151,101 +152,121 @@ export function BookingPopup({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   const [form, setForm] = useState<AppointmentForm>(createEmptyAppointmentForm);
   const [message, setMessage] = useState<'idle' | 'success' | 'error' | 'required'>('idle');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const closeTimerRef = useRef<number | null>(null);
-
-  const clearCloseTimer = useCallback(() => {
-    if (closeTimerRef.current !== null) {
-      window.clearTimeout(closeTimerRef.current);
-      closeTimerRef.current = null;
-    }
-  }, []);
+  const [confirmation, setConfirmation] = useState<BookingConfirmation | null>(null);
+  const submissionGuardRef = useRef(createBookingSubmissionGuard());
 
   const close = useCallback(() => {
-    clearCloseTimer();
+    if (submissionGuardRef.current.isLocked()) return;
     setMessage('idle');
+    setConfirmation(null);
     setForm(createEmptyAppointmentForm());
     onClose();
-  }, [clearCloseTimer, onClose]);
-
-  const scheduleCloseAfterSuccess = useCallback(() => {
-    clearCloseTimer();
-    closeTimerRef.current = window.setTimeout(() => {
-      closeTimerRef.current = null;
-      close();
-    }, SUCCESS_CLOSE_DELAY_MS);
-  }, [clearCloseTimer, close]);
-
-  useEffect(() => clearCloseTimer, [clearCloseTimer]);
+  }, [onClose]);
 
   const submit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-
-    if (isSubmitting) return;
 
     if (!hasRequiredAppointmentFields(form)) {
       setMessage('required');
       return;
     }
 
+    if (!submissionGuardRef.current.acquire()) return;
+
     setIsSubmitting(true);
     setMessage('idle');
 
-    const body = {
-      fullName: form.fullName.trim(),
-      phone: form.phone.trim(),
-      bookingDate: form.bookingDate,
-      bookingTime: form.bookingTime,
-      service: form.service,
-      note: form.note.trim(),
-      language,
-      sourcePage: window.location.href,
-    };
-
     try {
-      const response = await fetch('/api/booking', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      });
-      const result: unknown = await response.json().catch(() => null);
-
-      if (!response.ok || !isSuccessfulResponse(result)) {
-        throw new Error('Booking submission failed');
-      }
-
-      setMessage('success');
-      scheduleCloseAfterSuccess();
+      const bookingConfirmation = await submitBookingRequest(createBookingRequestBody(form, language, window.location.href));
+      setConfirmation(bookingConfirmation);
     } catch {
       setMessage('error');
     } finally {
+      submissionGuardRef.current.release();
       setIsSubmitting(false);
     }
   };
 
   return (
-    <PopupShell isOpen={isOpen} onClose={close} dialogLabel={t.bookingPopup.dialogLabel} closeLabel={t.bookingPopup.close}>
-      <p className="section-label">{t.booking.eyebrow}</p>
-      <h2 className="mt-3 font-display text-3xl leading-tight text-charcoal sm:text-4xl">{t.bookingPopup.title}</h2>
-      <p className="mt-3 font-body leading-relaxed text-charcoal/65">{t.bookingPopup.description}</p>
+    <PopupShell
+      isOpen={isOpen}
+      onClose={close}
+      dialogLabel={confirmation ? t.bookingPopup.confirmationDialogLabel : t.bookingPopup.dialogLabel}
+      closeLabel={confirmation ? t.bookingPopup.closeConfirmation : t.bookingPopup.close}
+    >
+      {confirmation ? (
+        <BookingConfirmationPanel confirmation={confirmation} form={form} onClose={close} />
+      ) : (
+        <>
+          <p className="section-label">{t.booking.eyebrow}</p>
+          <h2 className="mt-3 font-display text-3xl leading-tight text-charcoal sm:text-4xl">{t.bookingPopup.title}</h2>
+          <p className="mt-3 font-body leading-relaxed text-charcoal/65">{t.bookingPopup.description}</p>
 
-      <form className="mt-6 space-y-4" onSubmit={submit} noValidate>
-        <AppointmentFields form={form} setForm={setForm} />
+          <form className="mt-6 space-y-4" onSubmit={submit} noValidate>
+            <AppointmentFields form={form} setForm={setForm} showNotificationConsent />
 
-        <FormMessage message={message} messages={t.bookingPopup} />
-        <button type="submit" className="btn-primary w-full border-0 px-5 py-3.5" disabled={isSubmitting || message === 'success'}>
-          {isSubmitting ? t.bookingPopup.submitting : t.bookingPopup.submit}
-        </button>
-      </form>
+            <FormMessage message={message} messages={t.bookingPopup} />
+            <button type="submit" className="btn-primary w-full border-0 px-5 py-3.5" disabled={isSubmitting}>
+              {isSubmitting ? t.bookingPopup.submitting : t.bookingPopup.submit}
+            </button>
+          </form>
+        </>
+      )}
     </PopupShell>
+  );
+}
+
+function BookingConfirmationPanel({
+  confirmation,
+  form,
+  onClose,
+}: {
+  confirmation: BookingConfirmation;
+  form: AppointmentForm;
+  onClose: () => void;
+}) {
+  const { t } = useLanguage();
+  const confirmationText = (template: string) => template.replace('{reference}', confirmation.bookingReference);
+
+  return (
+    <div className="py-2">
+      <p className="section-label">LELE HAIR DESIGN</p>
+      <h2 className="mt-3 font-display text-3xl leading-tight text-charcoal sm:text-4xl">{t.bookingPopup.confirmationTitle}</h2>
+      <div className="mt-5 space-y-3 border-l-2 border-burgundy bg-stone/60 p-4 font-body leading-relaxed text-charcoal">
+        <p lang="vi">{confirmationText(t.bookingPopup.confirmationVietnamese)}</p>
+        <p lang="en">{confirmationText(t.bookingPopup.confirmationEnglish)}</p>
+      </div>
+
+      <dl className="mt-6 grid grid-cols-[auto_1fr] gap-x-5 gap-y-3 border-y border-beige/70 py-5 font-body text-sm text-charcoal">
+        <dt className="font-semibold text-charcoal/65">{t.bookingPopup.referenceLabel}</dt>
+        <dd className="font-semibold tracking-wide">{confirmation.bookingReference}</dd>
+        <dt className="font-semibold text-charcoal/65">{t.bookingPopup.customerLabel}</dt>
+        <dd>{form.fullName}</dd>
+        <dt className="font-semibold text-charcoal/65">{t.bookingPopup.serviceLabel}</dt>
+        <dd>{form.service}</dd>
+        <dt className="font-semibold text-charcoal/65">{t.bookingPopup.dateLabel}</dt>
+        <dd>{form.bookingDate}</dd>
+        <dt className="font-semibold text-charcoal/65">{t.bookingPopup.timeLabel}</dt>
+        <dd>{form.bookingTime}</dd>
+        <dt className="font-semibold text-charcoal/65">{t.bookingPopup.statusLabel}</dt>
+        <dd><span className="font-semibold">{confirmation.bookingStatus}</span> — {t.bookingPopup.pendingStatus}</dd>
+      </dl>
+
+      <button type="button" onClick={onClose} className="btn-primary mt-6 w-full border-0 px-5 py-3.5">
+        {t.bookingPopup.closeConfirmation}
+      </button>
+    </div>
   );
 }
 
 function AppointmentFields({
   form,
   setForm,
+  showNotificationConsent = false,
 }: {
   form: AppointmentForm;
   setForm: Dispatch<SetStateAction<AppointmentForm>>;
+  showNotificationConsent?: boolean;
 }) {
   const { t } = useLanguage();
 
@@ -319,6 +340,27 @@ function AppointmentFields({
           className={`${inputClassName} resize-y`}
         />
       </FormField>
+      {showNotificationConsent ? (
+        <div className="border border-beige/70 bg-stone/45 p-4">
+          <div className="flex items-start gap-3">
+            <input
+              id="booking-notification-consent"
+              name="notificationConsent"
+              type="checkbox"
+              checked={form.notificationConsent}
+              onChange={(event) => setForm((current) => ({ ...current, notificationConsent: event.target.checked }))}
+              className="mt-1 size-4 accent-burgundy"
+              aria-describedby="booking-notification-consent-help"
+            />
+            <label htmlFor="booking-notification-consent" className="font-body text-sm leading-relaxed text-charcoal">
+              {t.bookingPopup.notificationConsent}
+            </label>
+          </div>
+          <p id="booking-notification-consent-help" className="mt-2 pl-7 font-body text-xs leading-relaxed text-charcoal/65">
+            {t.bookingPopup.notificationConsentHelp}
+          </p>
+        </div>
+      ) : null}
     </>
   );
 }

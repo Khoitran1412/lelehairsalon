@@ -1,6 +1,6 @@
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
-	"main": ".open-next/worker.js",
+	"main": "custom-worker.ts",
 	"name": "lele-hair-design",
 	"compatibility_date": "2026-08-25",
 	"compatibility_flags": [
@@ -19,6 +19,20 @@
 			"service": "lele-hair-design"
 		}
 	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "BOOKING_NOTIFICATION_LEDGER",
+				"class_name": "BookingNotificationLedger"
+			}
+		]
+	},
+	"exports": {
+		"BookingNotificationLedger": {
+			"type": "durable-object",
+			"storage": "sqlite"
+		}
+	},
 	"images": {
 		// Enable image optimization
 		// see https://opennext.js.org/cloudflare/howtos/image
